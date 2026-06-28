@@ -182,95 +182,193 @@ If you can design and explain this system confidently — you can handle most LL
 
 ## 7. UML Class Diagram
 
-```
-                    ┌─────────────────────────────┐
-                    │      ParkingLotSystem        │
-                    │ <<Singleton>>                │
-                    │─────────────────────────────│
-                    │ -instance: ParkingLotSystem  │
-                    │ -floors: ParkingFloor[]      │
-                    │ -activeTickets: Map<>        │
-                    │ -parkingStrategy: Parking    │
-                    │ -feeStrategy: FeeStrategy    │
-                    │─────────────────────────────│
-                    │ +getInstance()               │
-                    │ +parkVehicle()               │
-                    │ +unParkVehicle()             │
-                    │ +setParkingStrategy()        │
-                    │ +setFeeStrategy()            │
-                    └──────────────┬──────────────┘
-                                   │ uses
-              ┌────────────────────┼─────────────────────┐
-              │                    │                      │
-    ┌─────────▼────────┐  ┌───────▼───────┐   ┌────────▼────────┐
-    │   ParkingFloor   │  │ ParkingTicket │   │  PaymentService │
-    │──────────────────│  │───────────────│   │─────────────────│
-    │ -floorNumber     │  │ -ticketId     │   │ -strategy       │
-    │ -spots[]         │  │ -vehicle      │   │─────────────────│
-    │──────────────────│  │ -spot         │   │ +pay()          │
-    │ +addSpot()       │  │ -startTime    │   └────────┬────────┘
-    │ +getSpots()      │  │ -endTime      │            │ uses
-    └─────────┬────────┘  │───────────────│   ┌────────▼────────────┐
-              │           │ +setEndTime() │   │  <<interface>>      │
-              │ has       │ +getDuration()│   │  PaymentStrategy    │
-    ┌─────────▼────────┐  └───────────────┘   │─────────────────────│
-    │   ParkingSpot    │                       │ +pay(fee, ticket)   │
-    │──────────────────│                       └──────────┬──────────┘
-    │ -spotId          │                                   │ implements
-    │ -spotSize        │              ┌────────────────────┴──────────────────┐
-    │ -isOccupied      │              │                                       │
-    │ -parkedVehicle   │   ┌──────────▼──────────┐           ┌───────────────▼──────┐
-    │──────────────────│   │ CashPaymentStrategy  │           │ CardPaymentStrategy   │
-    │ +canFitVehicle() │   └─────────────────────┘           └──────────────────────┘
-    │ +parkVehicle()   │
-    │ +unParkVehicle() │   ┌──────────────────────────────────────────────────────┐
-    └──────────────────┘   │             <<interface>> FeeStrategy                │
-                           │──────────────────────────────────────────────────────│
-                           │ +calculateFee(ticket): number                        │
-                           └───────────────────┬──────────────────────────────────┘
-                                               │ implements
-                              ┌────────────────┴────────────────┐
-                              │                                  │
-                   ┌──────────▼──────────┐          ┌──────────▼──────────┐
-                   │  HourlyFeeStrategy  │          │ FlatRateFeeStrategy  │
-                   │  ₹X per hour        │          │  ₹Y per day          │
-                   └─────────────────────┘          └─────────────────────┘
+## UML Class Diagram
 
-                   ┌──────────────────────────────────────────────────────┐
-                   │           <<interface>> ParkingStrategy              │
-                   │──────────────────────────────────────────────────────│
-                   │ +findSpot(floors, vehicle): ParkingSpot | null       │
-                   └───────────────────┬──────────────────────────────────┘
-                                       │ implements
-                      ┌────────────────┴────────────────┐
-                      │                                  │
-           ┌──────────▼──────────┐          ┌──────────▼──────────┐
-           │ NearestFirstStrategy│          │ FlexibleSpotStrategy │
-           │ exact size match    │          │ larger spot if needed│
-           └─────────────────────┘          └─────────────────────┘
+### Notation Guide
 
-                           ┌──────────────────────┐
-                           │  <<abstract>> Vehicle │
-                           │──────────────────────│
-                           │ -vehicleNumber        │
-                           │ -vehicleSize          │
-                           └──────────┬───────────┘
-                                      │ extends
-                         ┌────────────┼───────────┐
-                         │            │            │
-                      ┌──▼──┐     ┌──▼──┐     ┌──▼───┐
-                      │ Car │     │Bike │     │Truck │
-                      └─────┘     └─────┘     └──────┘
-```
+| Symbol          | Meaning                          | Example                                 |
+| --------------- | -------------------------------- | --------------------------------------- |
+| `*--`           | Composition — owns lifecycle     | ParkingFloor owns ParkingSpot           |
+| `o--`           | Aggregation — has-a, independent | ParkingTicket has Vehicle               |
+| `-->`           | Association — uses               | ParkingLotSystem uses PaymentService    |
+| `<\|--`         | Inheritance — extends            | Car extends Vehicle                     |
+| `<\|..`         | Implements — interface           | NearestFirst implements ParkingStrategy |
+| `..>`           | Dependency — creates             | VehicleFactory creates Car              |
+| `<<abstract>>`  | Abstract class                   | Vehicle                                 |
+| `<<interface>>` | Interface                        | ParkingStrategy, FeeStrategy            |
+| `$`             | Static method/field              | getInstance()$                          |
 
-### UML Relationship Legend
+### Class Diagram
 
-```
-──────►  Association (uses/has)
-◆──────  Composition (owns, lifecycle dependent)
-△──────  Inheritance (extends)
-- - -►  Dependency (uses temporarily)
-<<I>>   Interface
+```mermaid
+classDiagram
+
+    %% ==================== CORE SERVICE ====================
+    class ParkingLotSystem {
+        -instance: ParkingLotSystem$
+        -floors: ParkingFloor[]
+        -activeTickets: Map~string, ParkingTicket~
+        -parkingStrategy: ParkingStrategy
+        -feeStrategy: FeeStrategy
+        +getInstance()$ ParkingLotSystem
+        +parkVehicle(vehicle) ParkingTicket
+        +unParkVehicle(ticketId, paymentMode) void
+        +addFloor(floor) void
+        +setParkingStrategy(strategy) void
+        +setFeeStrategy(strategy) void
+        +createBuilder() ParkingLotBuilder
+    }
+
+    class PaymentService {
+        -strategy: PaymentStrategy
+        +pay(fee, ticket) boolean
+    }
+
+    %% ==================== MODEL ====================
+    class ParkingFloor {
+        -floorNumber: number
+        -spots: ParkingSpot[]
+        +addSpot(spotId, size) void
+        +getSpots() ParkingSpot[]
+    }
+
+    class ParkingSpot {
+        -spotId: string
+        -spotSize: VehicleSize
+        -isOccupied: boolean
+        -parkedVehicle: Vehicle
+        +canFitVehicle(vehicle) boolean
+        +canFitVehicleFlexible(vehicle) boolean
+        +parkVehicle(vehicle) ParkingTicket
+        +unParkVehicle() void
+        +getIsOccupied() boolean
+    }
+
+    class ParkingTicket {
+        -ticketId: string
+        -vehicle: Vehicle
+        -spot: ParkingSpot
+        -startTime: Date
+        -endTime: Date
+        +setEndTime() void
+        +getDurationInHours() number
+    }
+
+    class Vehicle {
+        <<abstract>>
+        -vehicleNumber: string
+        -vehicleSize: VehicleSize
+        +getVehicleNumber() string
+        +getVehicleSize() VehicleSize
+    }
+
+    class Car
+    class Bike
+    class Truck
+
+    %% ==================== STRATEGIES ====================
+    class ParkingStrategy {
+        <<interface>>
+        +findSpot(floors, vehicle) ParkingSpot
+    }
+
+    class NearestFirstStrategy {
+        +findSpot(floors, vehicle) ParkingSpot
+    }
+
+    class FlexibleSpotStrategy {
+        +findSpot(floors, vehicle) ParkingSpot
+    }
+
+    class FeeStrategy {
+        <<interface>>
+        +calculateFee(ticket) number
+    }
+
+    class HourlyFeeStrategy {
+        -hourlyRate: number
+        +calculateFee(ticket) number
+    }
+
+    class FlatRateFeeStrategy {
+        -dailyRate: number
+        +calculateFee(ticket) number
+    }
+
+    class PaymentStrategy {
+        <<interface>>
+        +pay(fee, ticket) boolean
+    }
+
+    class CashPaymentStrategy {
+        +pay(fee, ticket) boolean
+    }
+
+    class CardPaymentStrategy {
+        +pay(fee, ticket) boolean
+    }
+
+    %% ==================== FACTORIES ====================
+    class VehicleFactory {
+        +createVehicle(vehicleNumber, size)$ Vehicle
+    }
+
+    class PaymentFactory {
+        +getStrategy(mode)$ PaymentStrategy
+    }
+
+    %% ==================== BUILDER ====================
+    class ParkingLotBuilder {
+        -floors: ParkingFloor[]
+        -currentFloor: ParkingFloor
+        +addFloor(floorNumber) ParkingLotBuilder
+        +addSpot(spotId, size) ParkingLotBuilder
+        +buildAndAddTo(system) void
+    }
+
+    %% ==================== RELATIONSHIPS ====================
+
+    %% Singleton
+    ParkingLotSystem --> ParkingLotSystem : getInstance()
+
+    %% Composition (owns lifecycle)
+    ParkingLotSystem *-- ParkingFloor : owns
+    ParkingFloor *-- ParkingSpot : owns
+
+    %% Aggregation (has-a, independent lifecycle)
+    ParkingTicket o-- Vehicle : references
+    ParkingTicket o-- ParkingSpot : references
+
+    %% Association (uses)
+    ParkingLotSystem --> ParkingTicket : manages
+    ParkingLotSystem --> PaymentService : uses
+    ParkingLotSystem --> ParkingStrategy : uses
+    ParkingLotSystem --> FeeStrategy : uses
+    PaymentService --> PaymentStrategy : delegates
+
+    %% Inheritance (extends)
+    Vehicle <|-- Car
+    Vehicle <|-- Bike
+    Vehicle <|-- Truck
+
+    %% Implementation (implements interface)
+    ParkingStrategy <|.. NearestFirstStrategy
+    ParkingStrategy <|.. FlexibleSpotStrategy
+    FeeStrategy <|.. HourlyFeeStrategy
+    FeeStrategy <|.. FlatRateFeeStrategy
+    PaymentStrategy <|.. CashPaymentStrategy
+    PaymentStrategy <|.. CardPaymentStrategy
+
+    %% Factory dependencies
+    VehicleFactory ..> Car : creates
+    VehicleFactory ..> Bike : creates
+    VehicleFactory ..> Truck : creates
+    PaymentFactory ..> CashPaymentStrategy : creates
+    PaymentFactory ..> CardPaymentStrategy : creates
+
+    %% Builder
+    ParkingLotBuilder ..> ParkingFloor : builds
+    ParkingLotBuilder ..> ParkingLotSystem : configures
 ```
 
 ---
